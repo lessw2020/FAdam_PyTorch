@@ -106,7 +106,7 @@ class FAdam(Optimizer):
                         dtype=momentum_dtype,
                     )
 
-                    # Fisher Information Matrix - EMA, init's as identity matrix
+                    # variance uncentered - EMA of squared gradient values
                     state["fim"] = torch.ones_like(
                         p,
                         dtype=fim_dtype,
@@ -125,13 +125,13 @@ class FAdam(Optimizer):
 
                 # begin FAdam algo -------------------------
                 #6 - beta2 bias correction per Section 3.4.4
-                curr_beta2 = beta2 *((1-beta2**step-1)/(1-beta2**step))
+                curr_beta2 = (beta2 *((1-beta2**step-1))/(1-beta2**step))
 
                 #7 - update fim
                 fim = (curr_beta2*fim) + (1-curr_beta2)*(grad*grad)
 
                 #8 - compute natural gradient
-                grad_nat = grad/(fim+eps)
+                grad_nat = grad/(fim +eps)
 
                 #9 - clip the natural gradient
                 rms = torch.sqrt(torch.mean(grad_nat**2))
