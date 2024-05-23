@@ -14,6 +14,7 @@ from torch.optim.optimizer import Optimizer
 try:
     from torchtitan.utils import logger
 except:
+    print("no logger")
     pass
 
 
@@ -40,7 +41,8 @@ class FAdam(Optimizer):
                 running averages of gradient and its square (default: (0.9, 0.999))
             eps (float, optional): term added to the denominator to improve
                 numerical stability (default: 1e-15)
-            TODO - explain c and p
+            clip (float, optional): maximum norm of the gradient (default: 1.0)
+            TODO - explain p
 
             # Usage
             TODO
@@ -104,7 +106,7 @@ class FAdam(Optimizer):
                         dtype=momentum_dtype,
                     )
 
-                    # variance uncentered - EMA of squared gradient values
+                    # Fisher Information Matrix - EMA, init's as identity matrix
                     state["fim"] = torch.ones_like(
                         p,
                         dtype=fim_dtype,
@@ -119,11 +121,9 @@ class FAdam(Optimizer):
 
                 momentum = state["momentum"]
                 fim = state["fim"]
-                #clip = state["clip"]
                 grad = p.grad
 
                 # begin FAdam algo -------------------------
-
                 #6 - beta2 bias correction per Section 3.4.4
                 curr_beta2 = beta2 *((1-beta2**step-1)/(1-beta2**step))
 
@@ -152,8 +152,18 @@ class FAdam(Optimizer):
 
                 grad_weights = grad_weights/ divisor
 
-                #13 - update weights
-                p = p - lr*(momentum+(weight_decay*grad_weights))
+                #13 - compute update
+                full_step = momentum +(weight_decay*grad_weights)
+
+                lr_step = lr * full_step
+                lr_step *=10000
+                #print(f"lr_step {lr_step}")
+
+                #14 - update weights
+                #print(f"pre-step {p.data}")
+                p.sub_(lr_step)
+                #print(f"post-step {p.data}")
+
 
 
             '''
