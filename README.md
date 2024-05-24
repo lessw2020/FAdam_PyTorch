@@ -1,5 +1,5 @@
 # FAdam_PyTorch
-an implentation of FAdam (Fisher Adam) in PyTorch
+an implementation of FAdam (Fisher Adam) in PyTorch
 
 Please see the official Arxiv paper:   
 [FAdam: Adam is a natural gradient optimizer using
