@@ -23,7 +23,7 @@ class FAdam(Optimizer):
         self,
         params,
         lr=1e-3,
-        weight_decay = 0.001,
+        weight_decay = 0.01,
         betas=(0.9, 0.999),
         clip = 1.0,
         p = 0.5,
@@ -125,13 +125,15 @@ class FAdam(Optimizer):
 
                 # begin FAdam algo -------------------------
                 #6 - beta2 bias correction per Section 3.4.4
-                curr_beta2 = (beta2 *((1-beta2**step-1))/(1-beta2**step))
+                curr_beta2 = (beta2 *((1-beta2**(step-1)))/(1-beta2**step))
 
                 #7 - update fim
                 fim = (curr_beta2*fim) + (1-curr_beta2)*(grad*grad)
 
                 #8 - compute natural gradient
-                grad_nat = grad/(fim +eps)
+                fim_base = fim**pval + eps# **2*pval
+
+                grad_nat = grad/fim_base
 
                 #9 - clip the natural gradient
                 rms = torch.sqrt(torch.mean(grad_nat**2))
@@ -140,77 +142,19 @@ class FAdam(Optimizer):
                 grad_nat = grad_nat/divisor
 
                 #10 - update momentum
-                momentum.mul_(beta1).add_(grad, alpha=1-beta1)
-
+                momentum.mul_(beta1).add_(grad_nat, alpha=1-beta1)
                 #11 - weight decay
-                grad_weights = p/(fim+eps)
+                grad_weights = p/fim_base
 
                 #12 - clip weight decay
                 rms = torch.sqrt(torch.mean(grad_weights**2))
                 divisor = max(1,rms)
                 divisor /= clip
-
                 grad_weights = grad_weights/ divisor
 
                 #13 - compute update
                 full_step = momentum +(weight_decay*grad_weights)
-
                 lr_step = lr * full_step
-                lr_step *=10000
-                #print(f"lr_step {lr_step}")
 
                 #14 - update weights
-                #print(f"pre-step {p.data}")
                 p.sub_(lr_step)
-                #print(f"post-step {p.data}")
-
-
-
-            '''
-
-
-                # weight decay, AdamW style
-                if weight_decay:
-                    p.data.mul_(1 - lr * weight_decay)
-
-                # update momentum
-                exp_avg.mul_(beta1).add_(grad, alpha=1 - beta1)
-
-                # update uncentered variance
-                exp_avg_sq.mul_(beta2).addcmul_(grad, grad, value=1 - beta2)
-
-                # adjust using bias1
-                bias_correction1 = 1 - beta1**step
-
-                step_size = lr / bias_correction1
-
-                # adjust using bias2
-                denom_correction = (1 - beta2**step) ** 0.5  # avoids math import
-
-                #if not use_numerical_guarantee:
-                centered_variance = exp_avg_sq.sqrt() / denom_correction.add_(
-                    1e-12, alpha=1
-                )
-
-                if use_numerical_guarantee:
-                #    denom_max = max(denom_correction, eps)
-                #    centered_variance = exp_avg_sq.sqrt() / denom_max
-
-                    safe_variance = torch.clamp(centered_variance, min=1e-7)
-                    safe_variance = safe_variance.sqrt()
-
-                # lr update to compensation
-                if use_kahan_summation:
-                    compensation = state["compensation"]
-                    compensation.addcdiv_(exp_avg, centered_variance, value=-step_size)
-                    # update weights with compensation (Kahan summation)
-                    # save error back to compensation for next iteration
-                    temp_buffer = p.detach().clone()
-                    p.data.add_(compensation)
-                    compensation.add_(temp_buffer.sub_(p.data))
-
-                elif use_numerical_guarantee:
-                    p.data.addcdiv_(exp_avg, safe_variance, value=-step_size)
-                else:
-                    p.data.addcdiv_(exp_avg, centered_variance, value=-step_size)
-            '''
