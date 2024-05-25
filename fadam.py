@@ -1,18 +1,7 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
-# All rights reserved.
-#
-# This source code is licensed under the MIT-style license found in the
-# LICENSE file in the root directory of this source tree.
-
-# FAdam (Fisher Adam): an implentation in PyTorch of the paper:
-#"FAdam: Adam is a natural gradient optimizer using diagonal empirical Fisher information"
-# https://www.arxiv.org/abs/2405.12807
-
-
 import torch
 from torch.optim.optimizer import Optimizer
 try:
-    from torchtitan.utils import logger
+    pass
 except:
     print("no logger")
     pass
@@ -27,7 +16,8 @@ class FAdam(Optimizer):
         betas=(0.9, 0.999),
         clip = 1.0,
         p = 0.5,
-        eps=1e-15,
+        eps=10e-8,
+        eps2=10e-4,
         momentum_dtype=torch.float32,
         fim_dtype=torch.float32,
 
@@ -52,6 +42,7 @@ class FAdam(Optimizer):
             betas=betas,
             weight_decay=weight_decay,
             eps=eps,
+            eps2=eps2,
             momentum_dtype=momentum_dtype,
             fim_dtype=fim_dtype,
             clip = clip,
@@ -78,6 +69,7 @@ class FAdam(Optimizer):
             beta1, beta2 = group["betas"]
             lr = group["lr"]
             eps = group["eps"]
+            eps2 = group["eps2"]
             clip = group["clip"]
             pval = group["p"]
             momentum_dtype = group["momentum_dtype"]
@@ -130,8 +122,12 @@ class FAdam(Optimizer):
                 #7 - update fim
                 fim = (curr_beta2*fim) + (1-curr_beta2)*(grad*grad)
 
+                #8 - adaptive epsilon
+                rms_grad = torch.sqrt(torch.mean((grad*grad)))
+                curr_eps = min(eps,eps2*rms_grad)
+
                 #8 - compute natural gradient
-                fim_base = fim**pval + eps# **2*pval
+                fim_base = fim**pval + curr_eps# **(2*pval)
 
                 grad_nat = grad/fim_base
 
@@ -143,6 +139,7 @@ class FAdam(Optimizer):
 
                 #10 - update momentum
                 momentum.mul_(beta1).add_(grad_nat, alpha=1-beta1)
+
                 #11 - weight decay
                 grad_weights = p/fim_base
 
