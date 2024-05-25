@@ -30,13 +30,21 @@ class FAdam(Optimizer):
             betas (Tuple[float, float], optional): coefficients used for computing
                 running averages of gradient and its square (default: (0.9, 0.999))
             eps (float, optional): term added to the denominator to improve
-                numerical stability (default: 1e-15)
+                numerical stability (default: 10e-8)
             clip (float, optional): maximum norm of the gradient (default: 1.0)
             TODO - explain p
 
             # Usage
             TODO
         """
+        # sanity checks
+        assert len(betas) == 2, "betas must be a tuple of two floats"
+        assert 0 <= betas[0] < 1 and 0 <= betas[1] < 1, "betas must be between 0 and 1"
+        assert lr > 0, "lr must be non-negative"
+        assert eps > 0, "eps must be non-negative"
+        assert eps2 > 0, "eps2 must be non-negative"
+        assert clip >= 0, "clip must be non-negative"
+        
         defaults = dict(
             lr=lr,
             betas=betas,
