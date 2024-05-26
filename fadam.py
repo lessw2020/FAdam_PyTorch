@@ -19,12 +19,11 @@ class FAdam(Optimizer):
         self,
         params,
         lr: float = 1e-3,
-        weight_decay: float = 0.01,
+        weight_decay: float = 0.1,
         betas: Tuple[float, float] = (0.9, 0.999),
         clip: float = 1.0,
         p: float = 0.5,
-        eps: float = 10e-8,
-        eps2: float = 10e-4,
+        eps: float = 1e-8,
         momentum_dtype: torch.dtype = torch.float32,
         fim_dtype: torch.dtype = torch.float32,
     ):
@@ -43,21 +42,11 @@ class FAdam(Optimizer):
             # Usage
             TODO
         """
-        
-        # sanity checks
-        assert len(betas) == 2, "betas must be a tuple of two floats"
-        assert 0 <= betas[0] < 1 and 0 <= betas[1] < 1, "betas must be between 0 and 1"
-        assert lr > 0, "lr must be non-negative"
-        assert eps > 0, "eps must be non-negative"
-        assert eps2 > 0, "eps2 must be non-negative"
-        assert clip >= 0, "clip must be non-negative"
-        
         defaults = dict(
             lr=lr,
             betas=betas,
             weight_decay=weight_decay,
             eps=eps,
-            eps2=eps2,
             momentum_dtype=momentum_dtype,
             fim_dtype=fim_dtype,
             clip=clip,
@@ -83,7 +72,6 @@ class FAdam(Optimizer):
             beta1, beta2 = group["betas"]
             lr = group["lr"]
             eps = group["eps"]
-            eps2 = group["eps2"]
             clip = group["clip"]
             pval = group["p"]
             momentum_dtype = group["momentum_dtype"]
@@ -127,36 +115,36 @@ class FAdam(Optimizer):
 
                 # 8 - adaptive epsilon
                 rms_grad = torch.sqrt(torch.mean((grad * grad)))
-                curr_eps = min(eps, eps2 * rms_grad)
+                curr_eps = eps * min(1, rms_grad)
 
-                # 8 - compute natural gradient
+                # 9 - compute natural gradient
                 fim_base = fim**pval + curr_eps  # **(2*pval)
 
                 grad_nat = grad / fim_base
 
-                # 9 - clip the natural gradient
+                # 10 - clip the natural gradient
                 rms = torch.sqrt(torch.mean(grad_nat**2))
                 divisor = max(1, rms)
                 divisor = divisor / clip
                 grad_nat = grad_nat / divisor
 
-                # 10 - update momentum
+                # 11 - update momentum
                 momentum.mul_(beta1).add_(grad_nat, alpha=1 - beta1)
 
-                # 11 - weight decay
+                # 12 - weight decay
                 grad_weights = p / fim_base
 
-                # 12 - clip weight decay
+                # 13 - clip weight decay
                 rms = torch.sqrt(torch.mean(grad_weights**2))
                 divisor = max(1, rms)
                 divisor /= clip
                 grad_weights = grad_weights / divisor
 
-                # 13 - compute update
+                # 14 - compute update
                 full_step = momentum + (weight_decay * grad_weights)
                 lr_step = lr * full_step
 
-                # 14 - update weights
+                # 15 - update weights
                 p.sub_(lr_step)
 
         return loss
