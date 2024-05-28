@@ -12,7 +12,7 @@
 import torch
 from torch.optim.optimizer import Optimizer
 from typing import Tuple, Optional
-
+from torchtitan.logging_utils import logger
 
 class FAdam(Optimizer):
     def __init__(
@@ -111,7 +111,7 @@ class FAdam(Optimizer):
                 curr_beta2 = beta2 * (1 - beta2 ** (step - 1)) / (1 - beta2**step)
 
                 # 7 - update fim
-                fim = (curr_beta2 * fim) + (1 - curr_beta2) * (grad * grad)
+                fim.mul_(curr_beta2).add_(grad * grad, alpha=1 - curr_beta2)
 
                 # 8 - adaptive epsilon
                 rms_grad = torch.sqrt(torch.mean((grad * grad)))
