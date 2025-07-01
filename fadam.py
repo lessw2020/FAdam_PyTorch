@@ -12,7 +12,12 @@
 import torch
 from torch.optim.optimizer import Optimizer
 from typing import Tuple, Optional
-from torchtitan.logging_utils import logger
+# Use TorchTitan's logger if the package is available; otherwise fall back to Python's built-in logging.
+try:
+    from torchtitan.logging_utils import logger  # type: ignore
+except ModuleNotFoundError:  # pragma: no cover – TorchTitan is optional
+    import logging
+    logger = logging.getLogger("FAdam")
 
 class FAdam(Optimizer):
     def __init__(
@@ -26,6 +31,7 @@ class FAdam(Optimizer):
         eps: float = 1e-8,
         momentum_dtype: torch.dtype = torch.float32,
         fim_dtype: torch.dtype = torch.float32,
+        maximize: bool = False,
     ):
         """
         Args:
@@ -37,7 +43,9 @@ class FAdam(Optimizer):
             eps (float, optional): term added to the denominator to improve
                 numerical stability (default: 1e-15)
             clip (float, optional): maximum norm of the gradient (default: 1.0)
-            TODO - explain p
+            p (float, optional): power for Fisher Information Matrix (default: 0.5)
+            maximize (bool, optional): maximize the params based on the objective, 
+                instead of minimizing (default: False)
 
             # Usage
             TODO
@@ -51,6 +59,7 @@ class FAdam(Optimizer):
             fim_dtype=fim_dtype,
             clip=clip,
             p=p,
+            maximize=maximize,
         )
 
         super().__init__(params, defaults)
@@ -77,6 +86,7 @@ class FAdam(Optimizer):
             momentum_dtype = group["momentum_dtype"]
             fim_dtype = group["fim_dtype"]
             weight_decay = group["weight_decay"]
+            maximize = group["maximize"]
 
             for p in group["params"]:
                 if p.grad is None:
@@ -105,6 +115,10 @@ class FAdam(Optimizer):
                 momentum = state["momentum"]
                 fim = state["fim"]
                 grad = p.grad
+                
+                # Apply maximize by flipping gradient sign
+                if maximize:
+                    grad = -grad
 
                 # begin FAdam algo -------------------------
                 # 6 - beta2 bias correction per Section 3.4.4
@@ -115,7 +129,7 @@ class FAdam(Optimizer):
 
                 # 8 - adaptive epsilon
                 rms_grad = torch.sqrt(torch.mean((grad * grad)))
-                curr_eps = eps * min(1, rms_grad)
+                curr_eps = eps * max(1, rms_grad)
 
                 # 9 - compute natural gradient
                 fim_base = fim**pval + curr_eps  # **(2*pval)
@@ -146,5 +160,5 @@ class FAdam(Optimizer):
 
                 # 15 - update weights
                 p.sub_(lr_step)
-
+            
         return loss
